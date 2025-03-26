@@ -17,7 +17,7 @@ class BaseOidcAuthentication(BaseAuthentication):
     """
 
     @property
-    @cache(ttl=api_settings.OIDC_BEARER_TOKEN_EXPIRATION_TIME)
+    @cache(ttl=api_settings.OIDC_CONFIG_CACHE_EXPIRATION_TIME)
     def oidc_config(self):
         """
         Fetch the OpenID Connect discovery metadata from the well-known endpoint.

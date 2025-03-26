@@ -38,14 +38,12 @@ class DRFIDToken(IDToken):
 
 class JSONWebTokenAuthentication(BaseOidcAuthentication):
     """
-    Token based authentication using the JSON Web Token standard.
+    ID Token-based authentication using the JSON Web Token standard.
     Behind the scenes it makes use of the Authlib library ([Authlib](https://docs.authlib.org/en/latest/)).
     """
 
-    www_authenticate_realm = 'api'
-
     def authenticate_header(self, request):
-        return "JWT"
+        return api_settings.JWT_AUTH_HEADER_PREFIX
 
     @property
     def claims_options(self):

@@ -3,10 +3,16 @@
 This package contains an authentication mechanism for authenticating 
 users of a REST API using tokens obtained from OpenID Connect.
 
-Currently, it only supports JWT and Bearer tokens. JWT tokens will be 
-validated against the public keys of an OpenID connect authorization 
-service. Bearer tokens are used to retrieve the OpenID UserInfo for a
-user to identify him.
+It supports authentication via:
+ - JSON Web Tokens (JWT) ID Tokens
+ - Bearer Tokens
+
+In the case of JWTs, validation is done using the public keys made available by the OpenID Connect (OIDC) provider.
+Read more about how a JWT is validated in its RFC: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519).
+The OIDC provider's public keys are fetched from the OIDC provider's JWKS endpoint, which is cached for a configurable amount of time.
+
+In the case of Bearer tokens, the token is introspected using the OIDC provider's introspection endpoint.
+Read more about how a Bearer token is validated in its RFC: [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
 
 # Installation
 
@@ -34,50 +40,61 @@ REST_FRAMEWORK = {
 And configure the module itself in settings.py:
 ```py
 OIDC_AUTH = {
-    # Specify OpenID Connect endpoint. Configuration will be
-    # automatically done based on the discovery document found
-    # at <endpoint>/.well-known/openid-configuration
-    'OIDC_ENDPOINT': 'https://accounts.google.com',
+    # OIDC Client credentials
+    ## The following is related to OAuth2 Token Introspection
+    ## https://datatracker.ietf.org/doc/html/rfc7662
+    ## They are only required for use with Bearer tokens.
+
+    # The Client ID of this application for use with
+    # token introspection.
+    'OIDC_CLIENT_ID': None,
+    # The Client Secret of this application for use with
+    # token introspection.
+    'OIDC_CLIENT_SECRET': None,
+    # The endpoint to use for token introspection.
+    'INTROSPECTION_ENDPOINT': None,
+
+    ## OIDC Provider configuration
+
+    # The Issuer URL of the OpenID Provider
+    # Should match the `iss` claim in the JWT
+    'OIDC_ENDPOINT': None,
 
     # The Claims Options can now be defined by a static string.
     # ref: https://docs.authlib.org/en/latest/jose/jwt.html#jwt-payload-claims-validation
-    # The old OIDC_AUDIENCES option is removed in favor of this new option.
-    # `aud` is only required, when you set it as an essential claim.
     'OIDC_CLAIMS_OPTIONS': {
         'aud': {
-            'values': ['myapp'],
             'essential': True,
         }
     },
-    
-    # (Optional) Function that resolves id_token into user.
-    # This function receives a request and an id_token dict and expects to
-    # return a User object. The default implementation tries to find the user
-    # based on username (natural key) taken from the 'sub'-claim of the
-    # id_token.
-    'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
-    
-    # (Optional) Number of seconds in the past valid tokens can be 
-    # issued (default 600)
-    'OIDC_LEEWAY': 600,
-    
-    # (Optional) Time before signing keys will be refreshed (default 24 hrs)
-    'OIDC_JWKS_EXPIRATION_TIME': 24*60*60,
 
-    # (Optional) Time before bearer token validity is verified again (default 10 minutes)
-    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 10*60,
-    
-    # (Optional) Token prefix in JWT authorization header (default 'JWT')
+    # The time for which to keep the current OIDC configuration in cache
+    'OIDC_CONFIG_CACHE_EXPIRATION_TIME': 24 * 60 * 60,
+
+    # The time for which to keep the current JWKs (JSON Web Keys) in cache for validating JWTs.
+    'OIDC_JWKS_EXPIRATION_TIME': 24 * 60 * 60,
+
+    # Number of seconds in the past valid tokens can be issued
+    'OIDC_LEEWAY': 600,
+
+    # Function to resolve user from request and token or userinfo
+    'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
+
+    # Time before bearer token validity is verified again
+    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 600,
+
+    ## Prefixes for Authorization headers (likely won't need to change)
+    # The prefix for the JWT Authorization header
     'JWT_AUTH_HEADER_PREFIX': 'JWT',
-    
-    # (Optional) Token prefix in Bearer authorization header (default 'Bearer')
+    # The prefix for the Bearer Authorization header
     'BEARER_AUTH_HEADER_PREFIX': 'Bearer',
 
-    # (Optional) Which Django cache to use
+    # The Django cache to use
+    # This should be the name of a cache defined in the CACHES setting (defaults to 'default')
+    # If you have a Redis cache, then you could use that.
     'OIDC_CACHE_NAME': 'default',
-
-    # (Optional) A cache key prefix when storing and retrieving cached values
-    'OIDC_CACHE_PREFIX': 'oidc_auth.',
+    # The prefix to use for cache keys (excluding trailing '.')
+    'OIDC_CACHE_PREFIX': 'oidc_auth',
 }
 ```
 
