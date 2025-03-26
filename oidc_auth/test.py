@@ -1,14 +1,15 @@
 import json
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
 from requests.models import Response
 from authlib.jose import JsonWebToken, KeySet, RSAKey
+
 try:
-    from unittest.mock import patch, Mock
+    from unittest.mock import patch, Mock, MagicMock, AsyncMock
 except ImportError:
-    from mock import patch, Mock
+    from mock import patch, Mock, MagicMock, AsyncMock
 
 key = RSAKey.generate_key(is_private=True)
-
 
 def make_id_token(sub,
                   iss='http://example.com',
@@ -35,7 +36,20 @@ def make_jwt(payload):
     return jws
 
 
-class FakeRequests(object):
+class FakeRequests:
+    """
+    A fake requests object that can be used to mock `requests.get` in tests.
+
+    :usage: ```python
+    responder = FakeRequests()
+    responder.set_response("http://example.com/...",
+                           {"abc": "xyz"})
+
+    self.mock_get = [PATCH PATH TO requests.get]
+    self.mock_get.side_effect = self.responder.get
+    ```
+    """
+
     def __init__(self):
         self.responses = {}
 
@@ -56,29 +70,33 @@ class FakeRequests(object):
         return response
 
 
-class AuthenticationTestCaseMixin(object):
-    username = 'henk'
+class AuthenticationTestCaseMixin:
+    username = 'demouser'
+    user: User
+    responder: FakeRequests
+    mock_get: MagicMock | AsyncMock
 
-    def patch(self, thing_to_mock, **kwargs):
+    @staticmethod
+    def patch(thing_to_mock, **kwargs) -> MagicMock | AsyncMock:
+        """
+        Wrap the unittest patch decorator to make it easier to use in tests.
+        """
         patcher = patch(thing_to_mock, **kwargs)
         patched = patcher.start()
-        self.addCleanup(patcher.stop)
         return patched
 
-    def setUp(self):
+    def set_up(self):
+        """
+        Set up the test case with a user and a responder that will return the
+        """
         self.user, _ = get_user_model().objects.get_or_create(username=self.username)
         self.responder = FakeRequests()
         self.responder.set_response("http://example.com/.well-known/openid-configuration",
                                     {"jwks_uri": "http://example.com/jwks",
                                      "issuer": "http://example.com",
                                      "userinfo_endpoint": "http://example.com/userinfo"})
-        self.mock_get = self.patch('requests.get')
-        self.mock_get.side_effect = self.responder.get
         keys = KeySet(keys=[key])
-        self.patch(
-            'oidc_auth.authentication.request',
-            return_value=Mock(
-                status_code=200,
-                json=keys.as_json
-            )
-        )
+
+        self.responder.set_response("http://example.com/jwks", keys.as_dict())
+        self.mock_get = AuthenticationTestCaseMixin.patch('requests.get')
+        self.mock_get.side_effect = self.responder.get

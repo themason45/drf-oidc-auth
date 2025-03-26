@@ -4,7 +4,12 @@ from rest_framework.settings import APISettings
 USER_SETTINGS = getattr(settings, 'OIDC_AUTH', None)
 
 DEFAULTS = {
+    # OIDC Client credentials
+    'OIDC_CLIENT_ID': None,
+    'OIDC_CLIENT_SECRET': None,
+
     'OIDC_ENDPOINT': None,
+    'INTROSPECTION_ENDPOINT': None,
 
     # Currently unimplemented
     'OIDC_ENDPOINTS': [],

@@ -1,0 +1,51 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+  "setuptools>=67",
+]
+
+[project]
+name = "drf-oidc-auth"
+description = "Django Rest Framework OpenID Connect Authentication library"
+readme = "README.md"
+license = { text = "MIT License (MIT)" }
+requires-python = ">=3.10"
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = [
+  "version",
+]
+dependencies = [
+  "certifi",
+  "packaging>=22",
+  "setuptools>=67",
+  "virtualenv>=20.24.2",
+]
+
+## TESTING AND DEVELOPER CONFIGURATION BELOW ##
+[tool.black]
+line-length = 90
+include = '\.pyi?$'
+
+[tool.pyproject-fmt]
+# after how many column width split arrays/dicts into multiple lines, 1 will force always
+column_width = 120
+# how many spaces use for indentation
+indent = 2
+# if false will remove unnecessary trailing ``.0``'s from version specifiers
+keep_full_version = true
+# maximum Python version to use when generating version specifiers
+max_supported_python = "3.13"
+
+[tool.coverage.run]
+parallel = true

@@ -42,8 +42,8 @@ urlpatterns = [
 class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
     urls = __name__
 
-    def setUp(self):
-        super(TestBearerAuthentication, self).setUp()
+    def set_up(self):
+        super(TestBearerAuthentication, self).set_up()
         self.openid_configuration = {
             'issuer': 'http://accounts.example.com/dex',
             'authorization_endpoint': 'http://accounts.example.com/dex/auth',
@@ -212,15 +212,12 @@ class TestJWTAuthentication(AuthenticationTestCaseMixin, TestCase):
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth + 'x')
         self.assertEqual(resp.status_code, 401)
 
-    @patch('oidc_auth.authentication.jwt.decode')
     @patch('oidc_auth.authentication.logger')
     def test_decode_jwt_logs_exception_message_when_decode_throws_exception(
         self,
-        logger_mock, decode
+        logger_mock
     ):
         auth = 'JWT ' + make_id_token(self.user.username)
-        decode.side_effect = DecodeError, BadSignatureError
-
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
 
         self.assertEqual(resp.status_code, 401)
