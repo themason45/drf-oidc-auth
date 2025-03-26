@@ -23,6 +23,9 @@ def get_cache_key(token_type: TokenType, token_id: str) -> str:
 def get_cached_value(cache_key: str) -> Optional[Any]:
     """
     Get the value from the Django cache specified by the OIDC_CACHE_NAME setting.
+
+    :param cache_key: The key to look up
+    :return: The cached value
     """
     current_cache = caches[api_settings.OIDC_CACHE_NAME]
     return current_cache.get(cache_key)
@@ -32,6 +35,10 @@ def set_cache_value(cache_key: str, value: str, ttl: Optional[int] = None) -> No
     """
     Set the value associated with the cache key in the Django cache specified
     by the OIDC_CACHE_NAME setting.
+
+    :param cache_key: The key to store the value against.
+    :param value: The value to store.
+    :param ttl: The time-to-live for the cache entry in seconds.
     """
     current_cache = caches[api_settings.OIDC_CACHE_NAME]
     current_cache.set(cache_key, value, timeout=ttl)

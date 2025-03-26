@@ -68,10 +68,10 @@ OIDC_AUTH = {
         }
     },
 
-    # The time for which to keep the current OIDC configuration in cache
+    # The time (in seconds) for which to keep the current OIDC configuration in cache 
     'OIDC_CONFIG_CACHE_EXPIRATION_TIME': 24 * 60 * 60,
 
-    # The time for which to keep the current JWKs (JSON Web Keys) in cache for validating JWTs.
+    # The time (in seconds) for which to keep the current JWKs (JSON Web Keys) in cache for validating JWTs.
     'OIDC_JWKS_EXPIRATION_TIME': 24 * 60 * 60,
 
     # Number of seconds in the past valid tokens can be issued
@@ -80,8 +80,8 @@ OIDC_AUTH = {
     # Function to resolve user from request and token or userinfo
     'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
 
-    # Time before bearer token validity is verified again
-    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 600,
+    # Time (in seconds) before bearer token validity is verified again 
+    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 300,
 
     ## Prefixes for Authorization headers (likely won't need to change)
     # The prefix for the JWT Authorization header

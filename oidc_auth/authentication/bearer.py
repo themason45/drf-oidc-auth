@@ -59,11 +59,10 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
             'token': bearer_token
         })
 
-        introspection_response.raise_for_status()
+        if not introspection_response.ok:
+            raise AuthenticationFailed(_('Non 200 response from introspection endpoint'))
 
         introspection_result = introspection_response.json()
-
-        # TODO: Add token caching using the expiry date as a maximum
 
         if not introspection_result.get('active'):
             raise AuthenticationFailed(_('Token is not active'))

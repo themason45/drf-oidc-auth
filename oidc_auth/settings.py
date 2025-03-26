@@ -44,8 +44,8 @@ DEFAULTS = {
     # Function to resolve user from request and token or userinfo
     'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
 
-    # Time before bearer token validity is verified again
-    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 600,
+    # Time before bearer token validity is verified again (seconds)
+    'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 300,
 
     ## Prefixes for Authorization headers (likely won't need to change)
     # The prefix for the JWT Authorization header

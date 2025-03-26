@@ -50,6 +50,4 @@ class BaseOidcAuthentication(BaseAuthentication):
             msg = _(
                 'Invalid Authorization header. Credentials string should not contain spaces.')
             raise AuthenticationFailed(msg)
-
-        print("Found auth token: ", auth[1])
         return auth[1]
