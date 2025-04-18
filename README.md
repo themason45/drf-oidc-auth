@@ -138,3 +138,14 @@ class MyTestCase(AuthenticationTestCaseMixin, TestCase):
 * Requires [Django REST Framework](http://www.django-rest-framework.org/)
 * And of course [Django](https://www.djangoproject.com/)
 * Inspired on [REST framework JWT Auth](https://github.com/GetBlimp/django-rest-framework-jwt)
+
+## Test version compatibility matrix
+
+| Python | Django | DRF | Authlib | Requests |
+| --- | --- | --- | --- | --- |
+| 3.10 | 3.2.* | 3.11.* / 3.12.* / 3.13.* | 0.15.* / 1.0.* | 2.20.* |
+| 3.10 | 4.0.* | 3.13.* / 3.14.* | 0.15.* / 1.0.* | 2.20.* |
+| 3.11 | 4.0.* | 3.13.* / 3.14.* | 0.15.* / 1.0.* | 2.20.* |
+| 3.11 | 4.2.* | 3.14.* | 0.15.* / 1.0.* | 2.20.* |
+| 3.11 | 5.1.* | 3.15.* | 0.15.* / 1.0.* | 2.31.* |
+| 3.13 | 5.1.* | 3.15.* | 0.15.* / 1.0.* | 2.31.* |
