@@ -1,11 +1,13 @@
 import logging
 import time
+from typing import Optional
 
 import requests
 from authlib.jose import JsonWebKey, jwt
 from authlib.jose.errors import (BadSignatureError, DecodeError,
                                  ExpiredTokenError, JoseError)
 from authlib.oidc.core import IDToken
+from django.contrib.auth.models import User
 from django.utils.functional import cached_property
 from django.utils.translation import gettext as _
 from rest_framework.exceptions import AuthenticationFailed
@@ -42,8 +44,7 @@ class JSONWebTokenAuthentication(BaseOidcAuthentication):
     Behind the scenes it makes use of the Authlib library ([Authlib](https://docs.authlib.org/en/latest/)).
     """
 
-    def authenticate_header(self, request):
-        return api_settings.JWT_AUTH_HEADER_PREFIX
+    www_authenticate_realm = 'api'
 
     @property
     def claims_options(self):
@@ -57,10 +58,13 @@ class JSONWebTokenAuthentication(BaseOidcAuthentication):
             _claims_options[key] = value
         return _claims_options
 
-    def authenticate(self, request):
-        jwt_value = JSONWebTokenAuthentication.get_token(request)
+    def authenticate(self, request) -> Optional[tuple[User, dict]]:
+        jwt_value = JSONWebTokenAuthentication.get_token(request, prefix=api_settings.JWT_AUTH_HEADER_PREFIX)
+
+        # Return None here instead of raising an error so that other Authentication classes can be tried.
         if jwt_value is None:
             return None
+
         payload = self.decode_jwt(jwt_value)
         self.validate_claims(payload)
 
@@ -73,9 +77,18 @@ class JSONWebTokenAuthentication(BaseOidcAuthentication):
 
     @cache(ttl=api_settings.OIDC_JWKS_EXPIRATION_TIME)
     def jwks_data(self):
-        r = requests.get(self.oidc_config['jwks_uri'], allow_redirects=True)
-        r.raise_for_status()
-        return r.json()
+        try:
+            r = requests.get(
+                self.oidc_config['jwks_uri'],
+                allow_redirects=True,
+                timeout=10,
+                verify=True
+            )
+            r.raise_for_status()
+            return r.json()
+        except requests.RequestException as e:
+            logger.error(f"Error fetching JWKS: {str(e)}")
+            raise AuthenticationFailed(_("Error fetching JWKS"))
 
     @cached_property
     def issuer(self):
@@ -102,7 +115,8 @@ class JSONWebTokenAuthentication(BaseOidcAuthentication):
 
         return id_token
 
-    def validate_claims(self, id_token):
+    @staticmethod
+    def validate_claims(id_token):
         try:
             id_token.validate(
                 now=int(time.time()),
@@ -111,8 +125,9 @@ class JSONWebTokenAuthentication(BaseOidcAuthentication):
         except ExpiredTokenError:
             msg = _('Invalid Authorization header. JWT has expired.')
             raise AuthenticationFailed(msg)
-        except JoseError as e:
-            msg = _(str(type(e)) + str(e))
+        except JoseError:
+            msg = _('Invalid Authorization header. JWT validation failed.')
+            logger.exception(msg)
             raise AuthenticationFailed(msg)
 
     def authenticate_header(self, request):

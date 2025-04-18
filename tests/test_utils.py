@@ -73,7 +73,7 @@ class TestCacheDecorator(TestCase):
             self.assertTrue(caches['other'].get.called)
             self.assertFalse(caches['default'].get.called)
 
-    @patch.object(api_settings, 'OIDC_CACHE_PREFIX', 'some-other-prefix.')
+    @patch.object(api_settings, 'OIDC_CACHE_PREFIX', 'some-other-prefix')
     @patch('oidc_auth.utils.caching.caches')
     def test_respects_cache_prefix(self, caches):
         caches['default'].get.return_value = None

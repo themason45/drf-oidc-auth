@@ -9,10 +9,10 @@ flake8 = "*"
 tox = "*"
 
 [packages]
-django = "*"
-djangorestframework = "*"
+django = "5.1.8"
+djangorestframework = "3.15.2"
 authlib = "*"
 requests = "*"
 
 [requires]
-python_version = "3.13"
+python_version = ">=3.10"

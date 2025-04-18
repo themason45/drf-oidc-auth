@@ -17,6 +17,8 @@ DEFAULTS = {
     'OIDC_CLIENT_SECRET': None,
     # The endpoint to use for token introspection.
     'INTROSPECTION_ENDPOINT': None,
+    # The endpoint to use for user info.
+    'USERINFO_ENDPOINT': None,
 
     ## OIDC Provider configuration
 

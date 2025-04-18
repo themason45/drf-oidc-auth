@@ -12,7 +12,7 @@ setup(
     install_requires=[
         'authlib>=0.15.0',
         'cryptography>=2.6',
-        'django>=2.2.0',
+        'django>=3.1.3',
         'djangorestframework>=3.11.0',
         'requests>=2.20.0'
     ],
@@ -24,10 +24,9 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
         'Programming Language :: Python',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.13',
         'Topic :: Internet',
         'Topic :: Internet :: WWW/HTTP',
         'Topic :: Security',

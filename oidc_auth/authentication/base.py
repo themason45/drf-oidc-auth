@@ -1,4 +1,6 @@
 import json
+import logging
+from typing import Optional
 
 import requests
 from authlib.oidc.discovery import get_well_known_url
@@ -9,6 +11,8 @@ from django.utils.translation import gettext as _
 
 from oidc_auth.settings import api_settings
 from oidc_auth.utils import cache
+
+logger = logging.getLogger(__name__)
 
 
 class BaseOidcAuthentication(BaseAuthentication):
@@ -23,19 +27,27 @@ class BaseOidcAuthentication(BaseAuthentication):
         Fetch the OpenID Connect discovery metadata from the well-known endpoint.
         The well-known endpoint is derived from the OIDC_ENDPOINT setting.
         """
-        config = requests.get(
-            get_well_known_url(
-                api_settings.OIDC_ENDPOINT,
-                external=True
+        try:
+            response = requests.get(
+                get_well_known_url(
+                    api_settings.OIDC_ENDPOINT,
+                    external=True
+                ),
+                timeout=10,
+                verify=True
             )
-        ).json()
+            response.raise_for_status()
+            config = response.json()
+        except requests.RequestException as e:
+            logger.error(f"Error fetching OIDC configuration: {str(e)}")
+            raise AuthenticationFailed(_("Error fetching OIDC configuration"))
 
         return config
 
     @staticmethod
-    def get_token(request, prefix: str = api_settings.JWT_AUTH_HEADER_PREFIX):
+    def get_token(request, prefix: str = api_settings.JWT_AUTH_HEADER_PREFIX) -> Optional[bytes]:
         """
-
+        Get the token from the request authorisation header.
         """
         auth = get_authorization_header(request).split()
         auth_header_prefix = prefix.lower()

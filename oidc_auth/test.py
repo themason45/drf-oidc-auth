@@ -69,12 +69,26 @@ class FakeRequests:
 
         return response
 
+    def post(self, url, *args, **kwargs):
+        wanted_response = self.responses.get(url)
+        if not wanted_response:
+            status_code, content = 404, ''
+        else:
+            status_code, content = wanted_response
+
+        response = Response()
+        response._content = content.encode('utf-8')
+        response.status_code = status_code
+
+        return response
+
 
 class AuthenticationTestCaseMixin:
     username = 'demouser'
     user: User
     responder: FakeRequests
     mock_get: MagicMock | AsyncMock
+    mock_post: MagicMock | AsyncMock
 
     @staticmethod
     def patch(thing_to_mock, **kwargs) -> MagicMock | AsyncMock:
@@ -94,9 +108,13 @@ class AuthenticationTestCaseMixin:
         self.responder.set_response("http://example.com/.well-known/openid-configuration",
                                     {"jwks_uri": "http://example.com/jwks",
                                      "issuer": "http://example.com",
-                                     "userinfo_endpoint": "http://example.com/userinfo"})
+                                     "userinfo_endpoint": "http://example.com/userinfo",
+                                     "introspection_endpoint": "http://example.com/introspect"})
         keys = KeySet(keys=[key])
 
         self.responder.set_response("http://example.com/jwks", keys.as_dict())
+        self.responder.set_response("http://example.com/introspect", {"active": True, "username": self.username})
         self.mock_get = AuthenticationTestCaseMixin.patch('requests.get')
         self.mock_get.side_effect = self.responder.get
+        self.mock_post = AuthenticationTestCaseMixin.patch('requests.post')
+        self.mock_post.side_effect = self.responder.post

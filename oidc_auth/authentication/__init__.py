@@ -18,16 +18,27 @@ def get_user_by_id(_request: Request, userinfo: dict):
     Default function to resolve user from userinfo.
     It simply matches sub to the user's email.
 
-    Will 404 if the user does not exist. Your implementation
-    may want to handle this differently.
+    Returns None if the user does not exist to avoid information leakage.
+    Your implementation may want to handle this differently.
     """
     from django.contrib.auth import get_user_model
-    from django.shortcuts import get_object_or_404
+    from django.core.exceptions import ObjectDoesNotExist
+    import re
 
     subject = userinfo.get('sub')
-    print(subject)
+
     if not subject:
+        logger.warning("No subject claim found in token")
         return None
 
-    user = get_object_or_404(get_user_model(), email=userinfo['sub'])
-    return user
+    # Basic validation of the subject claim to prevent injection attacks
+    if not isinstance(subject, str) or not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', subject):
+        logger.warning(f"Invalid subject claim format: {subject}")
+        return None
+
+    try:
+        user = get_user_model().objects.get(email=subject)
+        return user
+    except ObjectDoesNotExist:
+        logger.warning(f"User with email {subject} not found")
+        return None
