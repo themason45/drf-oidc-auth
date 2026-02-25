@@ -6,6 +6,7 @@ requires = [
 
 [project]
 name = "drf-oidc-auth"
+version = "4.0.0"
 description = "Django Rest Framework OpenID Connect Authentication library"
 readme = "README.md"
 license = { text = "MIT License (MIT)" }
@@ -14,7 +15,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -22,15 +22,25 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dynamic = [
-  "version",
-]
 dependencies = [
-  "certifi",
-  "packaging>=22",
-  "setuptools>=67",
-  "virtualenv>=20.24.2",
+  "authlib>=1.0",
+  "cryptography>=2.6",
+  "django>=4.2",
+  "djangorestframework>=3.14.0",
+  "requests>=2.31.0",
 ]
+
+[project.optional-dependencies]
+allauth = [
+  "django-allauth>=64.0",
+]
+
+[[project.authors]]
+name = "Maarten van Schaik"
+email = "support@byte.nl"
+
+[project.urls]
+Homepage = "https://github.com/ByteInternet/drf-oidc-auth"
 
 ## TESTING AND DEVELOPER CONFIGURATION BELOW ##
 [tool.black]

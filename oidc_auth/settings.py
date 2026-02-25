@@ -15,6 +15,17 @@ DEFAULTS = {
     # The Client Secret of this application for use with
     # token introspection.
     'OIDC_CLIENT_SECRET': None,
+    # Optional: allauth provider ID (e.g. 'google', 'keycloak') to source
+    # client credentials from an allauth SocialApp resolved by the current
+    # Django site. When set, OIDC_CLIENT_ID / OIDC_CLIENT_SECRET are ignored.
+    # Requires django-allauth with 'allauth.socialaccount' and
+    # 'django.contrib.sites' in INSTALLED_APPS.
+    'OIDC_ALLAUTH_PROVIDER': None,
+    # Optional: the key inside SocialApp.settings to read the OIDC issuer URL
+    # from. When set, overrides OIDC_ENDPOINT on a per-site/per-app basis.
+    # Example: if your SocialApp.settings stores {"oidc_endpoint": "https://…"},
+    # set this to 'oidc_endpoint'.
+    'OIDC_ALLAUTH_ISSUER_KEY': None,
     # The endpoint to use for token introspection.
     'INTROSPECTION_ENDPOINT': None,
     # The endpoint to use for user info.

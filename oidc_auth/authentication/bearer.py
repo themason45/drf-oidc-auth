@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import logging
+import time
 from typing import Optional
 
 import requests
@@ -11,6 +12,7 @@ from rest_framework.exceptions import AuthenticationFailed
 from oidc_auth.authentication.base import BaseOidcAuthentication
 from oidc_auth.settings import api_settings
 from oidc_auth.utils import cache
+from oidc_auth.utils.allauth import get_allauth_app, get_allauth_issuer
 from oidc_auth.utils.caching import get_cache_key, get_cached_value, set_cache_value
 
 logging.basicConfig()
@@ -45,18 +47,27 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
 
         # Early return if the token is cached
         if cached_introspection_result := get_cached_value(cache_key):
-            print("Found cached value")
             user = api_settings.OIDC_RESOLVE_USER_FUNCTION(request, cached_introspection_result)
             return user, cached_introspection_result
 
+        # Resolve the OIDC config, using a per-site issuer from allauth when available
+        social_app = get_allauth_app(request)
+        issuer = get_allauth_issuer(social_app)
+        oidc_conf = self.oidc_config_for(issuer) if issuer else self.oidc_config
+
         # Resolve the introspection endpoint
-        introspection_endpoint = self.oidc_config.get('introspection_endpoint', api_settings.INTROSPECTION_ENDPOINT)
+        introspection_endpoint = oidc_conf.get('introspection_endpoint', api_settings.INTROSPECTION_ENDPOINT)
         if not introspection_endpoint:
             raise AuthenticationFailed(_('Invalid introspection_endpoint URL. Did not find a URL from OpenID connect '
                                          'discovery metadata nor settings.OIDC_AUTH.INTROSPECTION_ENDPOINT.'))
 
-        client_id = api_settings.OIDC_CLIENT_ID
-        client_secret = api_settings.OIDC_CLIENT_SECRET
+        if social_app is not None:
+            client_id = social_app.client_id
+            client_secret = social_app.secret
+        else:
+            client_id = api_settings.OIDC_CLIENT_ID
+            client_secret = api_settings.OIDC_CLIENT_SECRET
+
         auth_header = base64.b64encode(f'{client_id}:{client_secret}'.encode('ascii')).decode('ascii')
 
         try:
@@ -77,22 +88,32 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
             raise AuthenticationFailed(_("Error calling introspection endpoint"))
 
         if not introspection_response.ok:
+            logger.error(f"Non 200 response from introspection endpoint: {str(introspection_response.status_code)}")
+            logger.error(f"Response body: {introspection_response.text}")
             raise AuthenticationFailed(_('Non 200 response from introspection endpoint'))
 
         introspection_result = introspection_response.json()
+        print(introspection_result)
 
         if not introspection_result.get('active'):
             raise AuthenticationFailed(_('Token is not active'))
 
         # Set the `sub` claim to the `username`. The default implementation of `OIDC_RESOLVE_USER_FUNCTION` uses the
         # `sub` claim to resolve the user; however, OIDC introspection endpoints don't return this by default.
-        introspection_result["sub"] = introspection_result["username"]
+        username = introspection_result.get('username')
+        if username is None:
+            raise AuthenticationFailed(_('Token introspection response is missing the username claim'))
+        introspection_result['sub'] = username
 
         # Calculate cache value expiry time.
-        # The introspection result will contain an `exp` claim, which is the expiry time of the token, we also
-        # have the `OIDC_BEARER_TOKEN_EXPIRATION_TIME` setting which acts as a default. We will use the earliest.
-        token_expiry = introspection_result.get('exp', 0)
-        cache_expiry = min(token_expiry, api_settings.OIDC_BEARER_TOKEN_EXPIRATION_TIME)
+        # `exp` is an absolute Unix timestamp (RFC 7662); convert to a relative TTL before comparing
+        # with OIDC_BEARER_TOKEN_EXPIRATION_TIME.
+        token_exp = introspection_result.get('exp')
+        if token_exp:
+            remaining_seconds = max(0, int(token_exp - time.time()))
+            cache_expiry = min(remaining_seconds, api_settings.OIDC_BEARER_TOKEN_EXPIRATION_TIME)
+        else:
+            cache_expiry = api_settings.OIDC_BEARER_TOKEN_EXPIRATION_TIME
 
         # Cache the introspection result
         set_cache_value(cache_key, introspection_result, ttl=cache_expiry)

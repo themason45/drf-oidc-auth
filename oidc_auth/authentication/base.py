@@ -21,28 +21,31 @@ class BaseOidcAuthentication(BaseAuthentication):
     """
 
     @property
-    @cache(ttl=api_settings.OIDC_CONFIG_CACHE_EXPIRATION_TIME)
     def oidc_config(self):
         """
-        Fetch the OpenID Connect discovery metadata from the well-known endpoint.
-        The well-known endpoint is derived from the OIDC_ENDPOINT setting.
+        Fetch the OpenID Connect discovery metadata using the global OIDC_ENDPOINT
+        setting. Results are cached per endpoint via oidc_config_for().
+        """
+        return self.oidc_config_for(api_settings.OIDC_ENDPOINT)
+
+    @cache(ttl=api_settings.OIDC_CONFIG_CACHE_EXPIRATION_TIME)
+    def oidc_config_for(self, endpoint: str) -> dict:
+        """
+        Fetch the OpenID Connect discovery metadata for a specific issuer URL.
+        Results are cached per endpoint, so multiple sites with different issuers
+        each get their own cache entry.
         """
         try:
             response = requests.get(
-                get_well_known_url(
-                    api_settings.OIDC_ENDPOINT,
-                    external=True
-                ),
+                get_well_known_url(endpoint, external=True),
                 timeout=10,
                 verify=True
             )
             response.raise_for_status()
-            config = response.json()
+            return response.json()
         except requests.RequestException as e:
             logger.error(f"Error fetching OIDC configuration: {str(e)}")
             raise AuthenticationFailed(_("Error fetching OIDC configuration"))
-
-        return config
 
     @staticmethod
     def get_token(request, prefix: str = api_settings.JWT_AUTH_HEADER_PREFIX) -> Optional[bytes]:

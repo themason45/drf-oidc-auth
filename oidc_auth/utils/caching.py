@@ -8,6 +8,8 @@ from oidc_auth.settings import api_settings
 
 TokenType = Literal["Bearer", "JWT"]
 
+_CACHE_MISS = object()
+
 
 def get_cache_key(token_type: TokenType, token_id: str) -> str:
     """
@@ -84,8 +86,8 @@ class cache(object):
 
             key = api_settings.OIDC_CACHE_PREFIX + '.' + '.'.join([fn.__name__] + list(map(str, key_args)))
 
-            cached_value = t_cache.get(key, version=self.cache_version)
-            if not cached_value:
+            cached_value = t_cache.get(key, _CACHE_MISS, version=self.cache_version)
+            if cached_value is _CACHE_MISS:
                 cached_value = fn(this, *args)
                 t_cache.set(key, cached_value, timeout=self.ttl, version=self.cache_version)
             return cached_value

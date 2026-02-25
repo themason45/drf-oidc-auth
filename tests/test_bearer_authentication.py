@@ -1,27 +1,11 @@
-import sys
 import time
+from unittest.mock import Mock, PropertyMock, patch
 
+import requests
 from django.test import TestCase
 from rest_framework.exceptions import AuthenticationFailed
 
 from oidc_auth.test import AuthenticationTestCaseMixin
-
-if sys.version_info > (3,):
-    long = int
-else:
-    # noinspection PyShadowingBuiltins
-    class ConnectionError(OSError):
-        """
-        Wrapper for ConnectionError to be compatible with Python 2.7.
-        """
-        pass
-
-try:
-    from unittest.mock import Mock, PropertyMock, patch
-except ImportError:
-    # Supress warnings since this is dependent on the Python version
-    # noinspection PyUnresolvedReferences,PyPackageRequirements
-    from mock import Mock, PropertyMock, patch
 
 
 class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
@@ -48,29 +32,31 @@ class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
 
     def test_using_valid_bearer_token(self):
         self.responder.set_response(
-            'http://example.com/introspect', {'username': self.user.username, 'active': True, 'exp': 30})
+            'http://example.com/introspect',
+            {'username': self.user.username, 'active': True, 'exp': int(time.time()) + 300})
         auth = 'Bearer abcdefg'
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
         self.assertEqual(resp.content.decode(), 'a')
         self.assertEqual(resp.status_code, 200)
 
     def test_cache_of_valid_bearer_token(self):
-        token_expiry = 1
+        cache_ttl = 2
+        token_exp = int(time.time()) + cache_ttl
         self.responder.set_response(
-            'http://example.com/introspect', {'username': self.user.username, 'active': True, 'exp': token_expiry})
+            'http://example.com/introspect',
+            {'username': self.user.username, 'active': True, 'exp': token_exp})
         auth = 'Bearer egergerg'
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
         self.assertEqual(resp.status_code, 200)
 
-        # Token expires, but validity is cached
+        # Token expires at the server, but our local cache still considers it valid
         self.responder.set_response('http://example.com/introspect', "", 401)
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(token_expiry)
+        time.sleep(cache_ttl + 1)
 
-        # The cached value should have expired as the introspection endpoint specified the lifetime of the token
-        # The caching backend should invalidate the cached value after `token_expiry` has passed.
+        # Cache has expired; re-validates against introspection endpoint which now rejects it
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
         self.assertEqual(resp.status_code, 401)
 
@@ -93,6 +79,42 @@ class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
         self.assertEqual(resp.status_code, 200)
 
+    def test_using_inactive_bearer_token(self):
+        """A 200 introspection response with active=false is rejected."""
+        self.responder.set_response(
+            'http://example.com/introspect', {'active': False}, 200)
+        auth = 'Bearer inactivetoken'
+        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_introspection_network_error(self):
+        """A network error during the introspection POST returns 401."""
+        self.mock_post.side_effect = requests.RequestException("Connection failed")
+        auth = 'Bearer sometoken'
+        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_introspection_missing_username(self):
+        """An introspection response without a username claim returns 401 rather than crashing."""
+        self.responder.set_response(
+            'http://example.com/introspect', {'active': True}, 200)
+        auth = 'Bearer tokenwithoutusr'
+        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_missing_introspection_endpoint(self):
+        """AuthenticationFailed is raised when no introspection endpoint is discoverable."""
+        with patch('oidc_auth.authentication.BaseOidcAuthentication.oidc_config',
+                   new_callable=PropertyMock) as mock_config:
+            mock_config.return_value = {
+                'issuer': 'http://example.com',
+                'jwks_uri': 'http://example.com/jwks',
+                # No introspection_endpoint
+            }
+            auth = 'Bearer sometoken'
+            resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+            self.assertEqual(resp.status_code, 401)
+
     def test_using_malformed_bearer_token(self):
         auth = 'Bearer abc def'
         resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
@@ -113,7 +135,6 @@ class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
         with patch('oidc_auth.authentication.BaseOidcAuthentication.oidc_config',
                    new_callable=PropertyMock) as oidc_config_mock:
             oidc_config_mock.return_value = self.openid_configuration
-            # Import BearerTokenAuthentication here.
             from oidc_auth.authentication import BearerTokenAuthentication
 
             authentication = BearerTokenAuthentication()
@@ -129,7 +150,6 @@ class TestBearerAuthentication(AuthenticationTestCaseMixin, TestCase):
         with patch('oidc_auth.authentication.BaseOidcAuthentication.oidc_config',
                    new_callable=PropertyMock) as oidc_config_mock:
             oidc_config_mock.return_value = self.openid_configuration
-            # Import BearerTokenAuthentication here.
             from oidc_auth.authentication import BearerTokenAuthentication
             authentication = BearerTokenAuthentication()
 

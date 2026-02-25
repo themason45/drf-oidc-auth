@@ -1,151 +1,228 @@
 # OpenID Connect authentication for Django Rest Framework
 
-This package contains an authentication mechanism for authenticating 
+This package contains an authentication mechanism for authenticating
 users of a REST API using tokens obtained from OpenID Connect.
 
 It supports authentication via:
- - JSON Web Tokens (JWT) ID Tokens
- - Bearer Tokens
+- JSON Web Tokens (JWT) ID Tokens
+- Bearer Tokens
 
-In the case of JWTs, validation is done using the public keys made available by the OpenID Connect (OIDC) provider.
-Read more about how a JWT is validated in its RFC: [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519).
-The OIDC provider's public keys are fetched from the OIDC provider's JWKS endpoint, which is cached for a configurable amount of time.
+In the case of JWTs, validation is done using the public keys made available by the OpenID
+Connect provider. Read more about JWT validation in [RFC 7519](https://datatracker.ietf.org/doc/html/rfc7519).
+The provider's public keys are fetched from its JWKS endpoint and cached for a configurable time.
 
-In the case of Bearer tokens, the token is introspected using the OIDC provider's introspection endpoint.
-Read more about how a Bearer token is validated in its RFC: [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
+In the case of Bearer tokens, the token is introspected using the provider's introspection
+endpoint. Read more about token introspection in [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662).
 
-# Installation
+---
 
-Install using pip:
+## Installation
 
 ```sh
 pip install drf-oidc-auth
 ```
 
-Configure authentication for Django REST Framework in settings.py:
+If you intend to use the [django-allauth integration](#django-allauth-integration), install the
+optional extra instead:
 
-```py
+```sh
+pip install drf-oidc-auth[allauth]
+```
+
+---
+
+## Configuration
+
+Configure the authentication classes in `settings.py`:
+
+```python
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        # ...
         'oidc_auth.authentication.JSONWebTokenAuthentication',
         'oidc_auth.authentication.BearerTokenAuthentication',
     ),
 }
 ```
 
-And configure the module itself in settings.py:
-```py
+Then add an `OIDC_AUTH` block to configure the module:
+
+```python
 OIDC_AUTH = {
-    # OIDC Client credentials
-    ## The following is related to OAuth2 Token Introspection
-    ## https://datatracker.ietf.org/doc/html/rfc7662
-    ## They are only required for use with Bearer tokens.
+    # --- OIDC provider ---
 
-    # The Client ID of this application for use with
-    # token introspection.
-    'OIDC_CLIENT_ID': None,
-    # The Client Secret of this application for use with
-    # token introspection.
-    'OIDC_CLIENT_SECRET': None,
-    # The endpoint to use for token introspection.
-    'INTROSPECTION_ENDPOINT': None,
+    # Issuer URL of the OpenID Provider.
+    # Used to construct the well-known discovery endpoint and must match
+    # the `iss` claim in received JWTs.
+    'OIDC_ENDPOINT': 'https://sso.example.com/realms/myrealm',
 
-    ## OIDC Provider configuration
-
-    # The Issuer URL of the OpenID Provider
-    # Should match the `iss` claim in the JWT
-    'OIDC_ENDPOINT': None,
-
-    # The Claims Options can now be defined by a static string.
+    # Claims validation options passed to authlib.
     # ref: https://docs.authlib.org/en/latest/jose/jwt.html#jwt-payload-claims-validation
     'OIDC_CLAIMS_OPTIONS': {
         'aud': {
             'essential': True,
+            'values': ['my-client-id'],
         }
     },
 
-    # The time (in seconds) for which to keep the current OIDC configuration in cache 
-    'OIDC_CONFIG_CACHE_EXPIRATION_TIME': 24 * 60 * 60,
+    # --- Bearer token / introspection (RFC 7662) ---
 
-    # The time (in seconds) for which to keep the current JWKs (JSON Web Keys) in cache for validating JWTs.
-    'OIDC_JWKS_EXPIRATION_TIME': 24 * 60 * 60,
+    # Client ID and secret used for Basic auth on the introspection endpoint.
+    'OIDC_CLIENT_ID': 'my-client-id',
+    'OIDC_CLIENT_SECRET': 'my-client-secret',
 
-    # Number of seconds in the past valid tokens can be issued
-    'OIDC_LEEWAY': 600,
+    # Override the introspection endpoint if it is not published in the
+    # provider's discovery document.
+    'INTROSPECTION_ENDPOINT': None,
 
-    # Function to resolve user from request and token or userinfo
-    'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
+    # Override the userinfo endpoint if it is not published in the
+    # provider's discovery document.
+    'USERINFO_ENDPOINT': None,
 
-    # Time (in seconds) before bearer token validity is verified again 
+    # How long (seconds) a validated bearer token result is cached locally
+    # before the introspection endpoint is called again.
     'OIDC_BEARER_TOKEN_EXPIRATION_TIME': 300,
 
-    ## Prefixes for Authorization headers (likely won't need to change)
-    # The prefix for the JWT Authorization header
-    'JWT_AUTH_HEADER_PREFIX': 'JWT',
-    # The prefix for the Bearer Authorization header
-    'BEARER_AUTH_HEADER_PREFIX': 'Bearer',
+    # --- Caching ---
 
-    # The Django cache to use
-    # This should be the name of a cache defined in the CACHES setting (defaults to 'default')
-    # If you have a Redis cache, then you could use that.
+    # How long (seconds) to cache the OIDC discovery document.
+    'OIDC_CONFIG_CACHE_EXPIRATION_TIME': 24 * 60 * 60,
+
+    # How long (seconds) to cache the provider's public JWKS.
+    'OIDC_JWKS_EXPIRATION_TIME': 24 * 60 * 60,
+
+    # Django cache backend to use (must be defined in settings.CACHES).
     'OIDC_CACHE_NAME': 'default',
-    # The prefix to use for cache keys (excluding trailing '.')
+
+    # Prefix applied to all cache keys.
     'OIDC_CACHE_PREFIX': 'oidc_auth',
+
+    # --- Misc ---
+
+    # Maximum age (seconds) of a token's `iat` claim relative to now.
+    'OIDC_LEEWAY': 600,
+
+    # Dotted-path to a function that resolves a Django user from the
+    # request and the token payload / introspection result.
+    # Default implementation looks up a user by email using the `sub` claim.
+    'OIDC_RESOLVE_USER_FUNCTION': 'oidc_auth.authentication.get_user_by_id',
+
+    # Authorization header prefixes (change only if your provider is non-standard).
+    'JWT_AUTH_HEADER_PREFIX': 'JWT',
+    'BEARER_AUTH_HEADER_PREFIX': 'Bearer',
 }
 ```
 
-# Running tests
+---
+
+## django-allauth Integration
+
+When your application has [django-allauth](https://docs.allauth.org/) installed you can source
+OIDC credentials and the issuer URL directly from a `SocialApp`, resolved per Django site.
+This allows different sites in a multi-site project to authenticate against different OIDC
+providers without any code changes.
+
+### Requirements
+
+- `django-allauth>=64.0` with `allauth.socialaccount` in `INSTALLED_APPS`
+- `django.contrib.sites` in `INSTALLED_APPS` with `SITE_ID` configured
+
+### Settings
+
+```python
+OIDC_AUTH = {
+    # Allauth provider ID to look up (e.g. the value of SocialApp.provider).
+    # When set, client_id and secret are taken from the matching SocialApp
+    # for the current Django site instead of from OIDC_CLIENT_ID / OIDC_CLIENT_SECRET.
+    'OIDC_ALLAUTH_PROVIDER': 'keycloak',
+
+    # Key inside SocialApp.settings (a JSON field) that holds the OIDC issuer URL.
+    # When set, overrides OIDC_ENDPOINT on a per-site basis.
+    # Example: if SocialApp.settings == {"oidc_endpoint": "https://…"}, set this to 'oidc_endpoint'.
+    'OIDC_ALLAUTH_ISSUER_KEY': 'oidc_endpoint',
+
+    # OIDC_ENDPOINT is still used as a fallback when no SocialApp is found.
+    'OIDC_ENDPOINT': 'https://sso.example.com/realms/default',
+}
+```
+
+### How it works
+
+On each bearer token request the library:
+
+1. Queries `SocialApp.objects.filter(provider=OIDC_ALLAUTH_PROVIDER, sites=current_site).first()`
+2. If a `SocialApp` is found:
+   - Uses `social_app.client_id` and `social_app.secret` for introspection auth
+   - Reads `social_app.settings[OIDC_ALLAUTH_ISSUER_KEY]` as the issuer URL (if configured)
+   - Fetches and caches the OIDC discovery document for that issuer independently
+3. If no `SocialApp` is found, falls back to `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, and `OIDC_ENDPOINT` from settings
+
+The discovery document cache is keyed per issuer URL, so different sites using different
+providers do not interfere with each other.
+
+---
+
+## Running tests
 
 ```sh
 pip install tox
 tox
 ```
 
-## Mocking authentication
+---
 
-There's a `AuthenticationTestCaseMixin` provided in the `oidc_auth.test` module, which you 
-can use for testing authentication like so:
+## Mocking authentication in tests
+
+An `AuthenticationTestCaseMixin` is provided in `oidc_auth.test` to simplify writing tests
+for views that use OIDC authentication:
+
 ```python
-from oidc_auth.test import AuthenticationTestCaseMixin
 from django.test import TestCase
+from oidc_auth.test import AuthenticationTestCaseMixin
 
-class MyTestCase(AuthenticationTestCaseMixin, TestCase):
-    def test_example_cache_of_valid_bearer_token(self):
+class MyViewTests(AuthenticationTestCaseMixin, TestCase):
+    def setUp(self):
+        self.set_up()
+
+    def test_valid_bearer_token(self):
         self.responder.set_response(
-            'http://example.com/userinfo', {'sub': self.user.username})
-        auth = 'Bearer egergerg'
-        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+            'http://example.com/introspect',
+            {'username': self.user.username, 'active': True})
+        resp = self.client.get('/my-endpoint/', HTTP_AUTHORIZATION='Bearer mytoken')
         self.assertEqual(resp.status_code, 200)
 
-        # Token expires, but validity is cached
-        self.responder.set_response('http://example.com/userinfo', "", 401)
-        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
-        self.assertEqual(resp.status_code, 200)
-
-    def test_example_using_invalid_bearer_token(self):
-        self.responder.set_response('http://example.com/userinfo', "", 401)
-        auth = 'Bearer hjikasdf'
-        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+    def test_invalid_bearer_token(self):
+        self.responder.set_response('http://example.com/introspect', '', 401)
+        resp = self.client.get('/my-endpoint/', HTTP_AUTHORIZATION='Bearer badtoken')
         self.assertEqual(resp.status_code, 401)
 ```
 
-# References
+The mixin patches `requests.get` and `requests.post` with a `FakeRequests` responder so no
+real HTTP calls are made. Call `self.responder.set_response(url, body, status_code)` to
+configure what each endpoint returns.
 
-* Requires [Django REST Framework](http://www.django-rest-framework.org/)
-* And of course [Django](https://www.djangoproject.com/)
-* Inspired on [REST framework JWT Auth](https://github.com/GetBlimp/django-rest-framework-jwt)
+---
 
-## Test version compatibility matrix
+## Compatibility matrix
 
-| Python | Django | DRF | Authlib | Requests |
-| --- | --- | --- | --- | --- |
-| 3.10 | 3.2.* | 3.11.* / 3.12.* / 3.13.* | 0.15.* / 1.0.* | 2.20.* |
-| 3.10 | 4.0.* | 3.13.* / 3.14.* | 0.15.* / 1.0.* | 2.20.* |
-| 3.11 | 4.0.* | 3.13.* / 3.14.* | 0.15.* / 1.0.* | 2.20.* |
-| 3.11 | 4.2.* | 3.14.* | 0.15.* / 1.0.* | 2.20.* |
-| 3.11 | 5.1.* | 3.15.* | 0.15.* / 1.0.* | 2.31.* |
-| 3.13 | 5.1.* | 3.15.* | 0.15.* / 1.0.* | 2.31.* |
+| Python | Django | DRF    | Authlib | Requests |
+|--------|--------|--------|---------|----------|
+| 3.10   | 4.2.*  | 3.14.* / 3.15.* | 1.*  | 2.31.* |
+| 3.11   | 4.2.*  | 3.14.* / 3.15.* | 1.*  | 2.31.* |
+| 3.11   | 5.1.*  | 3.15.* | 1.*     | 2.31.* |
+| 3.12   | 4.2.*  | 3.14.* / 3.15.* | 1.*  | 2.31.* |
+| 3.12   | 5.1.*  | 3.15.* | 1.*     | 2.31.* |
+| 3.12   | 5.2.*  | 3.15.* | 1.*     | 2.31.* |
+| 3.13   | 5.1.*  | 3.15.* | 1.*     | 2.31.* |
+| 3.13   | 5.2.*  | 3.15.* | 1.*     | 2.31.* |
+
+---
+
+## References
+
+- [Django REST Framework](https://www.django-rest-framework.org/)
+- [Django](https://www.djangoproject.com/)
+- [Authlib](https://docs.authlib.org/)
+- Inspired by [REST framework JWT Auth](https://github.com/GetBlimp/django-rest-framework-jwt)

@@ -1,26 +1,10 @@
-import sys
 import time
+from unittest.mock import patch
 
+import requests
 from django.test import TestCase
 
 from oidc_auth.test import AuthenticationTestCaseMixin, make_id_token
-
-if sys.version_info > (3,):
-    long = int
-else:
-    # noinspection PyShadowingBuiltins
-    class ConnectionError(OSError):
-        """
-        Wrapper for ConnectionError to be compatible with Python 2.7.
-        """
-        pass
-
-try:
-    from unittest.mock import Mock, PropertyMock, patch
-except ImportError:
-    # Supress warnings since this is dependent on the Python version
-    # noinspection PyUnresolvedReferences,PyPackageRequirements
-    from mock import Mock, PropertyMock, patch
 
 
 class TestJWTAuthentication(AuthenticationTestCaseMixin, TestCase):
@@ -128,3 +112,22 @@ class TestJWTAuthentication(AuthenticationTestCaseMixin, TestCase):
         self.assertEqual(resp.status_code, 401)
         logger_mock.exception.assert_called_once_with(
             'Invalid Authorization header. JWT Signature verification failed.')
+
+    def test_oidc_config_fetch_failure(self):
+        """A network error fetching the OIDC discovery document returns 401."""
+        self.mock_get.side_effect = requests.RequestException("Connection failed")
+        auth = 'JWT ' + make_id_token(self.user.username, iat=time.time())
+        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+        self.assertEqual(resp.status_code, 401)
+
+    def test_jwks_fetch_failure(self):
+        """A network error fetching the JWKS returns 401."""
+        def selective_failure(url, *args, **kwargs):
+            if 'jwks' in url:
+                raise requests.RequestException("JWKS fetch failed")
+            return self.responder.get(url, *args, **kwargs)
+
+        self.mock_get.side_effect = selective_failure
+        auth = 'JWT ' + make_id_token(self.user.username, iat=time.time())
+        resp = self.client.get('/test/', HTTP_AUTHORIZATION=auth)
+        self.assertEqual(resp.status_code, 401)
