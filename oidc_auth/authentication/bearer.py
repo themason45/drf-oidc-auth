@@ -14,6 +14,7 @@ from oidc_auth.settings import api_settings
 from oidc_auth.utils import cache
 from oidc_auth.utils.allauth import get_allauth_app, get_allauth_issuer
 from oidc_auth.utils.caching import get_cache_key, get_cached_value, set_cache_value
+from oidc_auth.utils.introspection_result import BaseIntrospectionResult
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
     def authenticate_header(self, request):
         return api_settings.BEARER_AUTH_HEADER_PREFIX
 
-    def authenticate(self, request) -> Optional[tuple[User, dict]]:
+    def authenticate(self, request) -> Optional[tuple[User, BaseIntrospectionResult]]:
         bearer_token: Optional[bytes] = BearerTokenAuthentication.get_token(request,
                                                                             api_settings.BEARER_AUTH_HEADER_PREFIX)
 
@@ -92,8 +93,7 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
             logger.error(f"Response body: {introspection_response.text}")
             raise AuthenticationFailed(_('Non 200 response from introspection endpoint'))
 
-        introspection_result = introspection_response.json()
-        print(introspection_result)
+        introspection_result: BaseIntrospectionResult = introspection_response.json()
 
         if not introspection_result.get('active'):
             raise AuthenticationFailed(_('Token is not active'))
@@ -118,7 +118,7 @@ class BearerTokenAuthentication(BaseOidcAuthentication):
         # Cache the introspection result
         set_cache_value(cache_key, introspection_result, ttl=cache_expiry)
 
-        user = api_settings.OIDC_RESOLVE_USER_FUNCTION(request, introspection_result)
+        user: User = api_settings.OIDC_RESOLVE_USER_FUNCTION(request, introspection_result)
 
         return user, introspection_result
 

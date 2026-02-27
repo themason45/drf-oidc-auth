@@ -1,5 +1,4 @@
 from typing import Optional
-
 from oidc_auth.settings import api_settings
 
 
@@ -19,7 +18,7 @@ def get_allauth_issuer(social_app) -> Optional[str]:
     return settings_data.get(key) or None
 
 
-def get_allauth_app(request) -> Optional[object]:
+def get_allauth_app(request):
     """
     Retrieve the allauth SocialApp for the current Django site, when allauth
     integration is configured via OIDC_AUTH['OIDC_ALLAUTH_PROVIDER'].
@@ -42,4 +41,6 @@ def get_allauth_app(request) -> Optional[object]:
         return None
 
     site = get_current_site(request)
-    return SocialApp.objects.filter(provider=provider, sites=site).first()
+    app: Optional[SocialApp] = SocialApp.objects.filter(provider=provider, sites=site).first()
+
+    return app
